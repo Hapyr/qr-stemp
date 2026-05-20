@@ -71,7 +71,6 @@
   <p class="text-sm text-stone-600 dark:text-stone-400 mt-1">Stamps you've collected from other people.</p>
 
   <div class="mt-3 space-y-4">
-    {% set need = config.STAMPS_TO_REDEEM %}
     {% if cards|length == 0 %}
       <div class="rounded-lg border border-stone-200 dark:border-stone-800 p-6 text-center">
         <div class="text-3xl">📭</div>
@@ -80,32 +79,39 @@
       </div>
     {% endif %}
 
+    {% set max_dots = 30 %}
     {% for s in cards %}
+    {% set shown = s.count_stamp if s.count_stamp <= max_dots else max_dots %}
+    {% set overflow = s.count_stamp - shown %}
     <div class="rounded-lg border border-stone-200 dark:border-stone-800 p-5">
       <div class="flex items-baseline justify-between">
         <h3 class="font-semibold">{{ s.host_label }}</h3>
-        <span class="text-sm text-stone-500">{{ s.count_stamp }} / {{ need }}</span>
+        <span class="text-sm font-medium text-coffee-600 dark:text-coffee-500">
+          {{ s.count_stamp }} stamp{{ '' if s.count_stamp == 1 else 's' }}
+        </span>
       </div>
 
-      <div class="mt-3 grid grid-cols-5 gap-2" data-stamps="{{ s.count_stamp }}">
-        {% for i in range(need) %}
-        <div class="stamp-dot aspect-square rounded-full flex items-center justify-center
-                    border border-stone-300 dark:border-stone-700
-                    bg-stone-50 dark:bg-stone-900
-                    text-lg text-stone-300 dark:text-stone-700">☕</div>
+      <div class="mt-3 grid grid-cols-6 sm:grid-cols-10 gap-1.5">
+        {% for i in range(shown) %}
+        <div class="aspect-square rounded-full flex items-center justify-center
+                    bg-coffee-600 text-white border border-coffee-700 text-sm pop"
+             style="animation-delay: {{ (loop.index0 * 0.02)|round(2) }}s">☕</div>
         {% endfor %}
+        {% if overflow > 0 %}
+        <div class="aspect-square rounded-full flex items-center justify-center
+                    bg-stone-200 dark:bg-stone-700 text-stone-700 dark:text-stone-200
+                    border border-stone-300 dark:border-stone-600 text-xs font-semibold">
+          +{{ overflow }}
+        </div>
+        {% endif %}
       </div>
 
       <div class="mt-4 flex items-center justify-between">
         <button
-          class="px-4 py-2 rounded-md bg-coffee-600 hover:bg-coffee-700 text-white font-medium disabled:opacity-40 disabled:cursor-not-allowed transition"
-          data-redeem-host="{{ s.host_id }}"
-          {% if s.count_stamp < need %}disabled{% endif %}>
+          class="px-4 py-2 rounded-md bg-coffee-600 hover:bg-coffee-700 text-white font-medium transition"
+          data-redeem-host="{{ s.host_id }}">
           Redeem
         </button>
-        {% if s.count_stamp < need %}
-        <span class="text-xs text-stone-500">{{ need - s.count_stamp }} more to redeem</span>
-        {% endif %}
       </div>
       <div data-redeem-target="{{ s.host_id }}" class="mt-4 flex justify-center [&_canvas]:rounded [&_canvas]:bg-white [&_canvas]:p-2 [&_canvas]:border [&_canvas]:border-stone-200"></div>
       <div data-redeem-link-row="{{ s.host_id }}" class="mt-3 hidden flex items-center gap-2">
@@ -182,17 +188,6 @@
     if (!t) return;
     await navigator.clipboard.writeText(t);
     alert('Your recovery token has been copied. Save it to restore your card on another device.');
-  });
-
-  // Fill stamp dots
-  document.querySelectorAll('[data-stamps]').forEach(grid => {
-    const have = parseInt(grid.dataset.stamps);
-    grid.querySelectorAll('.stamp-dot').forEach((d, i) => {
-      if (i < have) {
-        d.classList.remove('bg-stone-50', 'dark:bg-stone-900', 'text-stone-300', 'dark:text-stone-700', 'border-stone-300', 'dark:border-stone-700');
-        d.classList.add('bg-coffee-600', 'text-white', 'border-coffee-700');
-      }
-    });
   });
 
   // Rename
