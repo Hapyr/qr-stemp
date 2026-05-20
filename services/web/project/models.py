@@ -45,6 +45,9 @@ class Stempel(db.Model):
     host_id = db.Column(db.Integer, db.ForeignKey("user.id"), index=True)
     client_id = db.Column(db.String(128), default="", index=True)
     token = db.Column(db.String(128), default="", index=True)
+    # Number of unused stamps remaining on this row. Decrements during redeem;
+    # `used` flips True when count reaches 0.
+    count = db.Column(db.Integer, default=1, nullable=False)
     used = db.Column(db.Boolean, default=False)
 
     host = db.relationship("User", foreign_keys=[host_id])

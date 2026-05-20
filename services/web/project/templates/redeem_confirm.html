@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}Redeem stamps{% endblock %}
+
+{% block content %}
+<div class="max-w-sm mx-auto mt-6 rounded-2xl border border-stone-200 dark:border-stone-800
+            bg-white dark:bg-stone-900 shadow-sm p-6 text-center pop">
+  <div class="text-3xl">🔥</div>
+  <h2 class="text-xl font-semibold mt-2">Redeem from {{ client_label }}</h2>
+  <p class="text-sm text-stone-600 dark:text-stone-400 mt-1">
+    <span class="font-medium">{{ available }}</span> stamp{{ '' if available == 1 else 's' }} available.
+  </p>
+
+  <form action="{{ url_for('main.api_redeem') }}" method="post" class="mt-5 space-y-4">
+    <input type="hidden" name="redeem" value="{{ redeem }}">
+
+    <div>
+      <div class="text-sm font-medium text-left">How many to redeem?</div>
+      <div id="redeem-picker" class="mt-2 flex flex-wrap items-center gap-2">
+        {% for n in [1,2,3,4,5,6] %}
+          {% if n <= available %}
+          <button type="button" data-n="{{ n }}"
+                  class="picker-opt w-9 h-9 rounded-md border border-stone-300 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 text-sm font-medium">
+            {{ n }}
+          </button>
+          {% endif %}
+        {% endfor %}
+        <input id="redeem-n-custom" type="number" min="1" max="{{ available }}" placeholder="…"
+               class="w-16 px-2 py-1 rounded-md border border-stone-300 dark:border-stone-700
+                      bg-white dark:bg-stone-900 text-sm
+                      focus:outline-none focus:ring-2 focus:ring-coffee-500 focus:border-transparent">
+      </div>
+    </div>
+
+    <input type="hidden" name="n" id="redeem-n-value" value="1">
+
+    <div class="flex gap-2">
+      <a href="{{ url_for('main.me') }}"
+         class="flex-1 px-4 py-2 rounded-md border border-stone-300 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 font-medium text-center">
+        Cancel
+      </a>
+      <button type="submit"
+              class="flex-1 px-4 py-2 rounded-md bg-coffee-600 hover:bg-coffee-700 text-white font-medium transition">
+        Redeem
+      </button>
+    </div>
+  </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  (function () {
+    const root = document.getElementById('redeem-picker');
+    const custom = document.getElementById('redeem-n-custom');
+    const hidden = document.getElementById('redeem-n-value');
+    const max = {{ available }};
+    let value = 1;
+
+    function paint() {
+      root.querySelectorAll('.picker-opt').forEach(b => {
+        const on = parseInt(b.dataset.n) === value;
+        b.classList.toggle('bg-coffee-600', on);
+        b.classList.toggle('text-white', on);
+        b.classList.toggle('border-coffee-700', on);
+      });
+      hidden.value = value;
+      if (custom.value && parseInt(custom.value) !== value) {
+        const matchedQuick = root.querySelector(`.picker-opt[data-n="${value}"]`);
+        if (matchedQuick) custom.value = '';
+      }
+    }
+    root.querySelectorAll('.picker-opt').forEach(b => {
+      b.addEventListener('click', () => { value = parseInt(b.dataset.n); paint(); });
+    });
+    custom.addEventListener('input', () => {
+      const v = parseInt(custom.value);
+      if (!isNaN(v) && v > 0) value = Math.min(v, max);
+      paint();
+    });
+    paint();
+  })();
+</script>
+{% endblock %}

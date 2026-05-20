@@ -19,7 +19,6 @@ from functools import wraps
 
 from flask import (
     Blueprint,
-    current_app,
     jsonify,
     redirect,
     render_template,
@@ -32,6 +31,8 @@ from .models import RedeemRequest, Stempel, User, db
 
 bp = Blueprint("main", __name__)
 
+MAX_STAMPS_PER_ACTION = 99
+
 
 # ---------- helpers ----------
 
@@ -39,6 +40,14 @@ bp = Blueprint("main", __name__)
 def _random_id(size: int = 6) -> str:
     chars = string.ascii_uppercase + string.digits
     return "".join(random.choice(chars) for _ in range(size))
+
+
+def _clamp_n(raw, default: int = 1) -> int:
+    try:
+        n = int(raw)
+    except (TypeError, ValueError):
+        return default
+    return max(1, min(MAX_STAMPS_PER_ACTION, n))
 
 
 def current_user() -> User | None:
@@ -77,7 +86,7 @@ def _stamp_cards(client_token: str):
     rows = (
         db.session.query(
             Stempel.host_id,
-            db.func.count(Stempel.client_id).label("count_stamp"),
+            db.func.coalesce(db.func.sum(Stempel.count), 0).label("count_stamp"),
         )
         .filter_by(client_id=client_token, used=False)
         .group_by(Stempel.host_id)
@@ -90,11 +99,20 @@ def _stamp_cards(client_token: str):
             {
                 "host_id": host_id,
                 "host_label": host.label if host else f"user-{host_id}",
-                "count_stamp": count,
+                "count_stamp": int(count or 0),
             }
         )
     cards.sort(key=lambda c: c["host_label"].lower())
     return cards
+
+
+def _available_for(host_id: int, client_id: str) -> int:
+    total = (
+        db.session.query(db.func.coalesce(db.func.sum(Stempel.count), 0))
+        .filter_by(host_id=host_id, client_id=client_id, used=False)
+        .scalar()
+    )
+    return int(total or 0)
 
 
 def _claim_for(user: User, claim: str) -> tuple[dict | None, int]:
@@ -132,11 +150,6 @@ def client_login():
 
 @bp.route("/login", methods=["POST"])
 def login_submit():
-    """Log in (or create a new user) and set the session cookie.
-
-    `password` carries the user_token. Optional `pending_claim` / `pending_redeem`
-    auto-execute that flow once logged in.
-    """
     token = (request.form.get("password") or "").strip()
     pending_claim = request.form.get("pending_claim", "")
     pending_redeem = request.form.get("pending_redeem", "")
@@ -160,7 +173,7 @@ def login_submit():
     _login(user)
 
     if pending_claim:
-        _claim_for(user, pending_claim)  # silent best-effort
+        _claim_for(user, pending_claim)
     if pending_redeem:
         return redirect(url_for("main.redeem_page", redeem=pending_redeem))
     return redirect(url_for("main.me"))
@@ -202,7 +215,6 @@ def set_name():
 @bp.route("/api/token")
 @api_login_required
 def reveal_token():
-    """Return own token (e.g. to copy to clipboard). Auth-gated."""
     return jsonify(token=current_user().user_token)
 
 
@@ -212,14 +224,14 @@ def reveal_token():
 @bp.route("/api/stamp", methods=["POST"])
 @api_login_required
 def api_stamp():
+    """Issue a stamp claim. The giver picks how many stamps the claim is worth."""
     user = current_user()
-    s = db.session.query(Stempel).filter_by(host_id=user.id, client_id="").first()
-    if s is None:
-        s = Stempel(host_id=user.id, client_id="")
-        s.set_token()
-        db.session.add(s)
-        db.session.commit()
-    return jsonify(claim=s.token)
+    n = _clamp_n(request.form.get("n"), default=1)
+    s = Stempel(host_id=user.id, client_id="", count=n)
+    s.set_token()
+    db.session.add(s)
+    db.session.commit()
+    return jsonify(claim=s.token, n=n)
 
 
 @bp.route("/api/claim_status/<claim>")
@@ -230,7 +242,6 @@ def claim_status(claim):
 
 @bp.route("/scan/<claim>")
 def scan_claim(claim):
-    """A user opened a stamp QR. If logged in, claim server-side; else login."""
     user = current_user()
     if user is None:
         return redirect(url_for("main.client_login", claim=claim))
@@ -251,12 +262,7 @@ def api_count():
         host_id = int(request.form.get("host_id", ""))
     except ValueError:
         return jsonify(error="bad host_id"), 400
-    count = (
-        db.session.query(Stempel)
-        .filter_by(client_id=user.user_token, host_id=host_id, used=False)
-        .count()
-    )
-    return jsonify(number_valid=count)
+    return jsonify(number_valid=_available_for(host_id, user.user_token))
 
 
 @bp.route("/api/redeem_request", methods=["POST"])
@@ -276,32 +282,69 @@ def api_redeem_request():
 
 @bp.route("/r/<redeem>")
 def redeem_page(redeem):
-    """The host scanned a redeem QR. If logged in, execute; else login."""
+    """Host scanned the redeem QR — show a confirmation page with a count picker."""
     host = current_user()
     if host is None:
         return redirect(url_for("main.client_login", redeem=redeem))
 
-    needed = current_app.config["STAMPS_TO_REDEEM"]
     rr = db.session.query(RedeemRequest).filter_by(redeem_token=redeem).first()
     if rr is None or rr.consumed:
         return render_template("error.html", title="Invalid or already-used redemption.")
     if rr.host_id != host.id:
         return render_template("error.html", title="That card isn't yours to redeem.")
 
+    client = db.session.query(User).filter_by(user_token=rr.client_id).first()
+    available = _available_for(host.id, rr.client_id)
+    if available <= 0:
+        return render_template("error.html", title="No stamps to redeem on that card.")
+
+    return render_template(
+        "redeem_confirm.html",
+        redeem=redeem,
+        client_label=client.label if client else "someone",
+        available=available,
+    )
+
+
+@bp.route("/api/redeem", methods=["POST"])
+@api_login_required
+def api_redeem():
+    host = current_user()
+    redeem = request.form.get("redeem", "")
+    n = _clamp_n(request.form.get("n"), default=1)
+
+    rr = db.session.query(RedeemRequest).filter_by(redeem_token=redeem).first()
+    if rr is None or rr.consumed:
+        return render_template("error.html", title="Invalid or already-used redemption.")
+    if rr.host_id != host.id:
+        return render_template("error.html", title="That card isn't yours to redeem.")
+
+    available = _available_for(host.id, rr.client_id)
+    if n > available:
+        return render_template(
+            "error.html",
+            title=f"Only {available} stamp(s) available on this card.",
+        )
+
     stamps = (
         db.session.query(Stempel)
         .filter_by(client_id=rr.client_id, host_id=host.id, used=False)
-        .limit(needed)
+        .order_by(Stempel.id)
         .all()
     )
-    if len(stamps) < needed:
-        return render_template("error.html", title="Not enough stamps yet.")
-
+    remaining = n
     for s in stamps:
-        s.used = True
+        if remaining <= 0:
+            break
+        take = min(s.count, remaining)
+        s.count -= take
+        if s.count == 0:
+            s.used = True
+        remaining -= take
+
     rr.consumed = True
     db.session.commit()
 
     session["flash_used"] = True
-    session["flash_info"] = f"{needed} stamps redeemed."
+    session["flash_info"] = f"{n} stamp(s) redeemed."
     return redirect(url_for("main.me"))

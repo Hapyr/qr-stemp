@@ -63,55 +63,6 @@ for anyone else:
 | `STAMPS_TO_REDEEM` | `3`                                | Number of stamps required for one redemption |
 | `PORT`             | `8000`                             | gunicorn bind port                           |
 
-## Deploy to Fly.io
-
-1. Install [`flyctl`](https://fly.io/docs/hands-on/install-flyctl/) and run `fly auth login`.
-2. `fly launch --no-deploy --copy-config` (pick a unique app name; update `app =` in `fly.toml`).
-3. `fly volumes create qr_stempel_data --size 1 --region fra`
-4. `fly secrets set SECRET_KEY=$(openssl rand -hex 32)`
-5. `fly deploy`
-
-For CI deploys: add a `FLY_API_TOKEN` repository secret (`fly tokens create deploy`) — the
-[`deploy.yml`](.github/workflows/deploy.yml) workflow will run on every push to `main`/`master`.
-Without the secret, the workflow no-ops.
-
-## Project layout
-
-```
-.
-├── Dockerfile                       # used by both compose and Fly
-├── docker-compose.yml
-├── fly.toml
-├── .github/workflows/
-│   ├── ci.yml                       # lint + import smoke + docker build
-│   └── deploy.yml                   # Fly.io deploy on main
-└── services/web/
-    ├── manage.py                    # flask CLI (create_db)
-    ├── wsgi.py                      # gunicorn entry
-    ├── requirements.txt
-    └── project/
-        ├── __init__.py              # create_app() factory
-        ├── config.py
-        ├── models.py                # User, Stempel
-        ├── routes.py                # main blueprint
-        └── templates/
-            ├── base.html
-            ├── landing.html
-            ├── login.html
-            ├── client.html
-            ├── client_auth.html
-            ├── host.html
-            └── error.html
-```
-
-## Roadmap ideas
-
-- Real host auth (currently any `/host/<id>` URL works — fine for prototype, not for production).
-- Per-host stamp card design (logo, color, redeem threshold).
-- Export / import a customer token via QR (so a phone change doesn't lose stamps).
-- Stats dashboard for hosts (claimed stamps over time).
-- PWA install + offline cache.
-
 ## License
 
 MIT
