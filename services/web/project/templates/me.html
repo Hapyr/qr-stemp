@@ -139,7 +139,11 @@
       Start scanner
     </button>
   </div>
-  <video id="qr-video" class="mt-4 w-full rounded-md hidden bg-black"></video>
+  <div id="scan-region" class="mt-4 hidden w-full aspect-video rounded-md overflow-hidden bg-black relative">
+    <video id="qr-video" playsinline muted autoplay
+           class="w-full h-full object-cover"></video>
+  </div>
+  <p id="scan-error" class="mt-2 text-sm text-red-600 dark:text-red-400 hidden"></p>
 </section>
 {% endblock %}
 
@@ -147,25 +151,36 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script type="module">
   import QrScanner from 'https://cdn.jsdelivr.net/npm/qr-scanner@1.4.2/qr-scanner.min.js';
-  const video = document.getElementById('qr-video');
+  const video  = document.getElementById('qr-video');
+  const region = document.getElementById('scan-region');
   const toggle = document.getElementById('scan-toggle');
+  const errEl  = document.getElementById('scan-error');
   let scanning = false, lock = false;
   const scanner = new QrScanner(video, r => {
     if (lock) return; lock = true;
     window.location.href = r.data;
-  }, { returnDetailedScanResult: true, highlightScanRegion: true });
+  }, { returnDetailedScanResult: true, highlightScanRegion: true, preferredCamera: 'environment' });
 
   toggle.addEventListener('click', async () => {
+    errEl.classList.add('hidden'); errEl.textContent = '';
     if (!scanning) {
-      video.classList.remove('hidden');
-      await scanner.start();
+      region.classList.remove('hidden');
+      try {
+        await scanner.start();
+      } catch (e) {
+        region.classList.add('hidden');
+        errEl.textContent = 'Camera unavailable: ' + (e.message || e);
+        errEl.classList.remove('hidden');
+        return;
+      }
       toggle.textContent = 'Stop scanner';
+      scanning = true;
     } else {
       scanner.stop();
-      video.classList.add('hidden');
+      region.classList.add('hidden');
       toggle.textContent = 'Start scanner';
+      scanning = false;
     }
-    scanning = !scanning;
   });
 </script>
 <script>
