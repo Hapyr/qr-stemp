@@ -1,0 +1,14 @@
+services:
+  web:
+    build: .
+    ports:
+      - "9001:8000"
+    volumes:
+      - qr_stempel_data:/usr/src/app/data
+    environment:
+      - SECRET_KEY=${SECRET_KEY:-dev-secret-change-me}
+      - STAMPS_TO_REDEEM=${STAMPS_TO_REDEEM:-3}
+    restart: unless-stopped
+
+volumes:
+  qr_stempel_data:

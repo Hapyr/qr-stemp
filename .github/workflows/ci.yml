@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+jobs:
+  lint-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        working-directory: services/web
+        run: |
+          pip install -r requirements.txt
+          pip install ruff
+
+      - name: Lint (ruff)
+        working-directory: services/web
+        run: ruff check .
+
+      - name: Import smoke test
+        working-directory: services/web
+        env:
+          DATABASE_URL: sqlite:///:memory:
+        run: python -c "from project import create_app; create_app()"
+
+      - name: Build Docker image
+        run: docker build -t qr-stempel:ci .

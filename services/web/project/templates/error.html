@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Error — QR Stempel{% endblock %}
+
+{% block content %}
+<div class="rounded-lg border border-stone-200 dark:border-stone-800 p-6 text-center">
+  <div class="text-3xl">⚠️</div>
+  <h2 class="text-xl font-semibold mt-2">Something went wrong</h2>
+  <p class="text-stone-600 dark:text-stone-400 mt-1">{{ title }}</p>
+
+  <div class="mt-5 flex flex-col sm:flex-row gap-2 justify-center">
+    <a href="/login"
+       class="px-4 py-2 rounded-md bg-coffee-600 hover:bg-coffee-700 text-white font-medium transition">
+      Home / Try again
+    </a>
+    <button onclick="dropToken()"
+            class="px-4 py-2 rounded-md border border-stone-300 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 transition">
+      Logout (clear token)
+    </button>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  function dropToken() {
+    localStorage.clear();
+    window.location.href = '/';
+  }
+</script>
+{% endblock %}

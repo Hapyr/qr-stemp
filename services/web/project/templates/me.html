@@ -1,0 +1,285 @@
+{% extends "base.html" %}
+{% block title %}{{ user_data.label }} — QR Stempel{% endblock %}
+
+{% block nav %}
+<button id="copy-token-btn" class="text-stone-600 hover:text-ink dark:text-stone-400 dark:hover:text-white">Token</button>
+<form action="{{ url_for('main.logout') }}" method="post" class="inline">
+  <button type="submit" class="text-stone-600 hover:text-red-600 dark:text-stone-400 dark:hover:text-red-400">Logout</button>
+</form>
+{% endblock %}
+
+{% block content %}
+{% if used or info %}
+<div class="mb-4 rounded-md border border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-200 px-4 py-3 pop">
+  ✓ {{ info or 'Stamps redeemed. Enjoy!' }}
+</div>
+{% endif %}
+
+<header class="flex items-baseline justify-between">
+  <h1 class="text-2xl font-bold">
+    Hi, <span id="me-label">{{ user_data.label }}</span>
+  </h1>
+  <button id="edit-name" class="text-sm text-stone-500 hover:text-coffee-600 dark:hover:text-coffee-500">Rename</button>
+</header>
+<form id="name-form" class="mt-2 hidden flex gap-2">
+  <input id="name-input" type="text" maxlength="120" placeholder="Display name"
+         class="flex-1 px-3 py-2 rounded-md border border-stone-300 dark:border-stone-700
+                bg-white dark:bg-stone-900
+                focus:outline-none focus:ring-2 focus:ring-coffee-500 focus:border-transparent">
+  <button type="submit" class="px-3 py-2 rounded-md bg-coffee-600 hover:bg-coffee-700 text-white text-sm">Save</button>
+</form>
+
+<!-- Give a stamp -->
+<section class="mt-6 rounded-lg border border-stone-200 dark:border-stone-800 p-5">
+  <h2 class="font-semibold">Give a stamp</h2>
+  <p class="text-sm text-stone-600 dark:text-stone-400 mt-1">
+    Show this QR. The other person scans it to collect a stamp on your card.
+  </p>
+  <button id="gen-btn"
+          class="mt-3 px-4 py-2 rounded-md bg-coffee-600 hover:bg-coffee-700 text-white font-medium transition">
+    Generate stamp QR
+  </button>
+  <div id="qrcode" class="mt-4 flex justify-center [&_canvas]:rounded [&_canvas]:bg-white [&_canvas]:p-2 [&_canvas]:border [&_canvas]:border-stone-200"></div>
+  <div id="gen-link-row" class="mt-3 hidden flex items-center gap-2">
+    <a id="gen-link" href="#" target="_blank" rel="noopener"
+       class="flex-1 truncate text-sm text-coffee-600 hover:text-coffee-700 dark:text-coffee-500 dark:hover:text-coffee-400 underline"></a>
+    <button id="gen-copy" type="button"
+            class="px-2 py-1 rounded-md border border-stone-300 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 text-xs">
+      Copy
+    </button>
+  </div>
+  <p id="gen-hint" class="text-xs text-stone-500 mt-2 hidden">Clears automatically once scanned.</p>
+</section>
+
+<!-- My cards -->
+<section class="mt-6">
+  <h2 class="font-semibold">Your stamp cards</h2>
+  <p class="text-sm text-stone-600 dark:text-stone-400 mt-1">Stamps you've collected from other people.</p>
+
+  <div class="mt-3 space-y-4">
+    {% set need = config.STAMPS_TO_REDEEM %}
+    {% if cards|length == 0 %}
+      <div class="rounded-lg border border-stone-200 dark:border-stone-800 p-6 text-center">
+        <div class="text-3xl">📭</div>
+        <h3 class="font-semibold mt-2">No stamps yet</h3>
+        <p class="text-sm text-stone-600 dark:text-stone-400 mt-1">Scan someone's QR code below to collect your first stamp.</p>
+      </div>
+    {% endif %}
+
+    {% for s in cards %}
+    <div class="rounded-lg border border-stone-200 dark:border-stone-800 p-5">
+      <div class="flex items-baseline justify-between">
+        <h3 class="font-semibold">{{ s.host_label }}</h3>
+        <span class="text-sm text-stone-500">{{ s.count_stamp }} / {{ need }}</span>
+      </div>
+
+      <div class="mt-3 grid grid-cols-5 gap-2" data-stamps="{{ s.count_stamp }}">
+        {% for i in range(need) %}
+        <div class="stamp-dot aspect-square rounded-full flex items-center justify-center
+                    border border-stone-300 dark:border-stone-700
+                    bg-stone-50 dark:bg-stone-900
+                    text-lg text-stone-300 dark:text-stone-700">☕</div>
+        {% endfor %}
+      </div>
+
+      <div class="mt-4 flex items-center justify-between">
+        <button
+          class="px-4 py-2 rounded-md bg-coffee-600 hover:bg-coffee-700 text-white font-medium disabled:opacity-40 disabled:cursor-not-allowed transition"
+          data-redeem-host="{{ s.host_id }}"
+          {% if s.count_stamp < need %}disabled{% endif %}>
+          Redeem
+        </button>
+        {% if s.count_stamp < need %}
+        <span class="text-xs text-stone-500">{{ need - s.count_stamp }} more to redeem</span>
+        {% endif %}
+      </div>
+      <div data-redeem-target="{{ s.host_id }}" class="mt-4 flex justify-center [&_canvas]:rounded [&_canvas]:bg-white [&_canvas]:p-2 [&_canvas]:border [&_canvas]:border-stone-200"></div>
+      <div data-redeem-link-row="{{ s.host_id }}" class="mt-3 hidden flex items-center gap-2">
+        <a data-redeem-link="{{ s.host_id }}" href="#" target="_blank" rel="noopener"
+           class="flex-1 truncate text-sm text-coffee-600 hover:text-coffee-700 dark:text-coffee-500 dark:hover:text-coffee-400 underline"></a>
+        <button type="button" data-redeem-copy="{{ s.host_id }}"
+                class="px-2 py-1 rounded-md border border-stone-300 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 text-xs">
+          Copy
+        </button>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+
+<!-- Scan -->
+<section class="mt-6 rounded-lg border border-stone-200 dark:border-stone-800 p-5">
+  <div class="flex items-center justify-between">
+    <div>
+      <h3 class="font-semibold">Scan a QR</h3>
+      <p class="text-sm text-stone-600 dark:text-stone-400">Collect a new stamp or redeem someone's card.</p>
+    </div>
+    <button id="scan-toggle"
+            class="px-4 py-2 rounded-md border border-stone-300 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 font-medium transition">
+      Start scanner
+    </button>
+  </div>
+  <video id="qr-video" class="mt-4 w-full rounded-md hidden bg-black"></video>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script type="module">
+  import QrScanner from 'https://cdn.jsdelivr.net/npm/qr-scanner@1.4.2/qr-scanner.min.js';
+  const video = document.getElementById('qr-video');
+  const toggle = document.getElementById('scan-toggle');
+  let scanning = false, lock = false;
+  const scanner = new QrScanner(video, r => {
+    if (lock) return; lock = true;
+    window.location.href = r.data;
+  }, { returnDetailedScanResult: true, highlightScanRegion: true });
+
+  toggle.addEventListener('click', async () => {
+    if (!scanning) {
+      video.classList.remove('hidden');
+      await scanner.start();
+      toggle.textContent = 'Stop scanner';
+    } else {
+      scanner.stop();
+      video.classList.add('hidden');
+      toggle.textContent = 'Start scanner';
+    }
+    scanning = !scanning;
+  });
+</script>
+<script>
+  // No user_token is rendered in this page. Auth = session cookie.
+  // We keep a localStorage copy of the recovery token (fetched on demand)
+  // only as a paste-to-restore helper for the SAME browser.
+
+  async function fetchToken() {
+    const r = await fetch('/api/token');
+    if (!r.ok) return null;
+    const j = await r.json();
+    // Cache in localStorage for the paste-to-login helper on this device.
+    localStorage.setItem('user_token', j.token);
+    return j.token;
+  }
+  fetchToken();  // refresh on each load
+
+  document.getElementById('copy-token-btn').addEventListener('click', async () => {
+    const t = await fetchToken();
+    if (!t) return;
+    await navigator.clipboard.writeText(t);
+    alert('Your recovery token has been copied. Save it to restore your card on another device.');
+  });
+
+  // Fill stamp dots
+  document.querySelectorAll('[data-stamps]').forEach(grid => {
+    const have = parseInt(grid.dataset.stamps);
+    grid.querySelectorAll('.stamp-dot').forEach((d, i) => {
+      if (i < have) {
+        d.classList.remove('bg-stone-50', 'dark:bg-stone-900', 'text-stone-300', 'dark:text-stone-700', 'border-stone-300', 'dark:border-stone-700');
+        d.classList.add('bg-coffee-600', 'text-white', 'border-coffee-700');
+      }
+    });
+  });
+
+  // Rename
+  const editBtn = document.getElementById('edit-name');
+  const nameForm = document.getElementById('name-form');
+  const nameInput = document.getElementById('name-input');
+  const meLabel = document.getElementById('me-label');
+  editBtn.addEventListener('click', () => {
+    nameForm.classList.toggle('hidden');
+    nameInput.value = meLabel.textContent.startsWith('user-') ? '' : meLabel.textContent;
+    nameInput.focus();
+  });
+  nameForm.addEventListener('submit', async e => {
+    e.preventDefault();
+    const body = new FormData();
+    body.append('name', nameInput.value);
+    const r = await fetch('/me/name', { method: 'POST', body });
+    const j = await r.json();
+    if (j.ok) { meLabel.textContent = j.label; nameForm.classList.add('hidden'); }
+  });
+
+  // Give a stamp
+  let genTimer = null;
+  const genBtn = document.getElementById('gen-btn');
+  const genTarget = document.getElementById('qrcode');
+  const genHint = document.getElementById('gen-hint');
+  const genLinkRow = document.getElementById('gen-link-row');
+  const genLink = document.getElementById('gen-link');
+  const genCopy = document.getElementById('gen-copy');
+  function clearGen() {
+    genTarget.innerHTML = '';
+    genHint.classList.add('hidden');
+    genLinkRow.classList.add('hidden');
+    genLink.href = '#'; genLink.textContent = '';
+    genBtn.textContent = 'Generate stamp QR';
+    clearInterval(genTimer);
+  }
+  genBtn.addEventListener('click', async () => {
+    if (genTarget.innerHTML !== '') { clearGen(); return; }
+    const r = await fetch('/api/stamp', { method: 'POST' });
+    const { claim } = await r.json();
+    const url = window.location.origin + '/scan/' + claim;
+    new QRCode(genTarget, { text: url, width: 240, height: 240, correctLevel: QRCode.CorrectLevel.H });
+    genLink.href = url; genLink.textContent = url;
+    genLinkRow.classList.remove('hidden');
+    genBtn.textContent = 'Clear';
+    genHint.classList.remove('hidden');
+    genTimer = setInterval(async () => {
+      const j = await (await fetch('/api/claim_status/' + claim)).json();
+      if (j.used) { clearGen(); location.reload(); }
+    }, 1000);
+  });
+  genCopy.addEventListener('click', async () => {
+    if (!genLink.href || genLink.href === '#') return;
+    await navigator.clipboard.writeText(genLink.href);
+    const old = genCopy.textContent; genCopy.textContent = 'Copied';
+    setTimeout(() => genCopy.textContent = old, 1200);
+  });
+
+  // Redeem
+  let redeemTimer = null;
+  function clearRedeem(hostId) {
+    document.querySelector(`[data-redeem-target="${hostId}"]`).innerHTML = '';
+    const row = document.querySelector(`[data-redeem-link-row="${hostId}"]`);
+    const link = document.querySelector(`[data-redeem-link="${hostId}"]`);
+    row.classList.add('hidden');
+    link.href = '#'; link.textContent = '';
+    clearInterval(redeemTimer);
+  }
+  document.querySelectorAll('[data-redeem-host]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const hostId = btn.dataset.redeemHost;
+      const target = document.querySelector(`[data-redeem-target="${hostId}"]`);
+      if (target.innerHTML !== '') { clearRedeem(hostId); return; }
+
+      const body = new FormData(); body.append('host_id', hostId);
+      const r = await fetch('/api/redeem_request', { method: 'POST', body });
+      const { redeem } = await r.json();
+      const url = window.location.origin + '/r/' + redeem;
+      new QRCode(target, { text: url, width: 240, height: 240, correctLevel: QRCode.CorrectLevel.H });
+
+      const link = document.querySelector(`[data-redeem-link="${hostId}"]`);
+      link.href = url; link.textContent = url;
+      document.querySelector(`[data-redeem-link-row="${hostId}"]`).classList.remove('hidden');
+
+      const cBody = () => { const f = new FormData(); f.append('host_id', hostId); return f; };
+      const initial = (await (await fetch('/api/count', { method: 'POST', body: cBody() })).json()).number_valid;
+      redeemTimer = setInterval(async () => {
+        const j = await (await fetch('/api/count', { method: 'POST', body: cBody() })).json();
+        if (j.number_valid !== initial) location.reload();
+      }, 1500);
+    });
+  });
+  document.querySelectorAll('[data-redeem-copy]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const link = document.querySelector(`[data-redeem-link="${btn.dataset.redeemCopy}"]`);
+      if (!link.href || link.href === '#') return;
+      await navigator.clipboard.writeText(link.href);
+      const old = btn.textContent; btn.textContent = 'Copied';
+      setTimeout(() => btn.textContent = old, 1200);
+    });
+  });
+</script>
+{% endblock %}

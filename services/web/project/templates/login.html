@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}Login — QR Stempel{% endblock %}
+
+{% block content %}
+<section class="rounded-lg border border-stone-200 dark:border-stone-800 p-5">
+  <h2 class="text-lg font-semibold">Open my stamp card</h2>
+  <p class="text-sm text-stone-600 dark:text-stone-400 mt-1">
+    Paste the recovery token from another device — or leave it empty to start a new card.
+  </p>
+
+  {% if error %}
+  <div class="mt-3 rounded-md border border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/40 text-red-800 dark:text-red-200 px-3 py-2 text-sm">
+    {{ error }}
+  </div>
+  {% endif %}
+
+  {% if pending_claim %}
+  <div class="mt-3 rounded-md border border-coffee-500/40 bg-coffee-50 dark:bg-coffee-700/20 text-coffee-700 dark:text-coffee-100 px-3 py-2 text-sm">
+    A stamp is waiting for you. Log in to claim it.
+  </div>
+  {% endif %}
+  {% if pending_redeem %}
+  <div class="mt-3 rounded-md border border-coffee-500/40 bg-coffee-50 dark:bg-coffee-700/20 text-coffee-700 dark:text-coffee-100 px-3 py-2 text-sm">
+    Log in to redeem this card.
+  </div>
+  {% endif %}
+
+  <form action="{{ url_for('main.login_submit') }}" method="post" class="mt-4 space-y-3">
+    <input type="hidden" name="pending_claim" value="{{ pending_claim or '' }}">
+    <input type="hidden" name="pending_redeem" value="{{ pending_redeem or '' }}">
+
+    <label class="block">
+      <span class="text-sm font-medium">Recovery token</span>
+      <div class="mt-1 flex gap-2">
+        <input type="text" name="password" id="user_token_pw" autocomplete="off" spellcheck="false"
+               placeholder="Paste your token (or leave empty)"
+               class="flex-1 px-3 py-2 rounded-md border border-stone-300 dark:border-stone-700
+                      bg-white dark:bg-stone-900
+                      focus:outline-none focus:ring-2 focus:ring-coffee-500 focus:border-transparent">
+        <button type="button" id="paste-btn"
+                class="px-3 py-2 rounded-md border border-stone-300 dark:border-stone-700
+                       hover:bg-stone-100 dark:hover:bg-stone-800 text-sm">
+          Paste
+        </button>
+      </div>
+      <span id="restored-hint" class="text-xs text-stone-500 mt-1 hidden">
+        ✓ Restored from this browser
+      </span>
+    </label>
+
+    <button type="submit"
+            class="w-full px-5 py-2.5 rounded-md bg-coffee-600 hover:bg-coffee-700 text-white font-medium transition">
+      Continue
+    </button>
+  </form>
+
+  <p class="text-xs text-stone-500 mt-3">
+    Every user can collect <em>and</em> give stamps — there's no separate host account.
+  </p>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // localStorage is just a recovery hint for paste-to-login on the same device.
+  // The actual auth is the server-side session cookie.
+  window.addEventListener('DOMContentLoaded', () => {
+    const input = document.getElementById('user_token_pw');
+    const hint = document.getElementById('restored-hint');
+    const stored = localStorage.getItem('user_token');
+    if (stored) {
+      input.value = stored;
+      hint.classList.remove('hidden');
+    }
+    document.getElementById('paste-btn').addEventListener('click', async () => {
+      try {
+        const text = await navigator.clipboard.readText();
+        if (text) input.value = text.trim();
+      } catch (e) {
+        input.focus();
+      }
+    });
+  });
+</script>
+{% endblock %}
