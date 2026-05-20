@@ -1,5 +1,7 @@
 # QR Stempel
 
+> 🌐 **Live demo:** <https://qr-stempel.fly.dev>
+
 A minimal, mobile-first **digital stamp card** for cafés, bakeries, and small shops.
 No app install, no email signup — customers' stamps are tied to a token stored in their browser.
 
