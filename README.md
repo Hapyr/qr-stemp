@@ -1,4 +1,4 @@
-# QR Stempel
+# Peer-to-peer digital stamp card solution that doesn't require an app
 
 > 🌐 **Live demo:** <https://qr-stempel.fly.dev>
 
